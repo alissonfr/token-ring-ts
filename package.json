@@ -4,6 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start:server": "ts-node ./src/server/index.ts",
+    "start:client": "ts-node ./src/client/index.ts",
     "start": "ts-node ./src/index.ts",
     "start:dev": "nodemon",
     "build": "tsc",
