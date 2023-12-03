@@ -1,16 +1,16 @@
-import { SocketClient } from "./socket-client";
+import { Socket } from "./socket";
 
 export class Token {
     private id: number;
     private hasStick: boolean;
     private tokens: number[];
-    private socketClient: SocketClient;
+    private socket: Socket;
 
-    constructor(id: number, hasStick: boolean, tokens: number[], socketClient: SocketClient) {
+    constructor(id: number, hasStick: boolean, tokens: number[], socket: Socket) {
         this.id = id;
         this.hasStick = hasStick;
         this.tokens = tokens;
-        this.socketClient = socketClient;
+        this.socket = socket;
     }
 
     public passToken(): void {
@@ -42,7 +42,7 @@ export class Token {
     }
 
     public receiveToken(): void {
-        // this.socketClient.receiveToken(this.id);
+        // this.socket.receiveToken(this.id);
         this.hasStick = true;
         console.log('O token foi recebido.', `\n* Data horário atual: ${new Date().toLocaleString()}`)
     }
