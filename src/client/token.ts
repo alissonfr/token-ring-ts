@@ -1,4 +1,4 @@
-import { Socket } from "./socket";
+import { Socket } from "./socket-client";
 
 export class Token {
     private id: number;
