@@ -9,8 +9,7 @@ const main = () => {
     const nodes = nodeConfig.nodes
     const hasToken = nodes.indexOf(currentNode) === 0;
 
-    const node = new TokenNode(currentNode, nodes, hasToken);
-    // node.start();
+    new TokenNode(currentNode, nodes, hasToken);
 }
 
 main();

@@ -1,6 +1,7 @@
-import * as net from 'net';
-import * as readline from 'readline';
-import { Token } from './interfaces/token';
+import * as net from "net";
+import * as readline from "readline";
+import { Token } from "./interfaces/token";
+import { TipoMensagemEnum } from "./enums/tipo-mensagem.enum";
 
 export class TokenNode {
   private readLine: readline.Interface;
@@ -24,8 +25,8 @@ export class TokenNode {
   }
 
   private run() {
-    this.server.on('connection', (socket) => {
-      socket.on('data', (data) => {
+    this.server.on("connection", (socket) => {
+      socket.on("data", (data) => {
         this.handleMessage(socket, data.toString());
       });
       
@@ -40,31 +41,21 @@ export class TokenNode {
   }
 
   private handleMessage(socket: net.Socket, msg: string) {
-    if (msg === 'TOKEN') {
-      socket.write('RECEIVED');
-      socket.destroy();
+    if (msg === TipoMensagemEnum.TOKEN) {
       console.log("Token recebido!");
       this.hasToken = true;
       return this.passToken();
     }
-    
-    if(msg === 'RECEIVED') {
-      console.log("???????????????????")
-
-      // colosar passToken aqui dentro
-
-      return;
-    }
   }
 
   private passToken() {
-    this.readLine.question('Deseja implementar o recurso? (s/n): ', (answer) => {
-      if (answer.toLowerCase() === 's') {
+    this.readLine.question("Deseja implementar o recurso? (s/n): ", (answer) => {
+      if (answer.toLowerCase() === "s") {
         console.log("Implementando recurso e passando token")
-        this.sendMessage("TOKEN");
+        this.sendMessage(TipoMensagemEnum.TOKEN);
       } else {
         console.log("Passando token")
-        this.sendMessage("TOKEN");
+        this.sendMessage(TipoMensagemEnum.TOKEN);
       }
     });
   }
@@ -74,22 +65,20 @@ export class TokenNode {
     
     const client = new net.Socket();
 
-    if(this.hasToken) {
-      client.on('error', (err) => {
-        client.destroy();
-        console.log(`O node da porta ${nextToken.port} está offline. Tentando próximo...`);
-        const currentTokenIndex = this.nodes.indexOf(this.currentNode);
-        const nextIndex = (currentTokenIndex + 1) % this.nodes.length;
-        this.nodes[nextIndex].isActive = false;
-        this.sendMessage("TOKEN");
-      });
+    client.on("error", (err) => {
+      client.destroy();
+      console.log(`O node da porta ${nextToken.port} está offline. Tentando próximo...`);
+      const currentTokenIndex = this.nodes.indexOf(this.currentNode);
+      const nextIndex = (currentTokenIndex + 1) % this.nodes.length;
+      this.nodes[nextIndex].isActive = false;
+      this.sendMessage(TipoMensagemEnum.TOKEN);
+    });
 
-      client.connect(nextToken.port, nextToken.host, () => {
-        client.write(message);
-        this.hasToken = false;
-        //client.destroy();
-      });
-    }
+    client.connect(nextToken.port, nextToken.host, () => {
+      client.write(message);
+      this.hasToken = false;
+      client.destroy();
+    });
     
   }
 

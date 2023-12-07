@@ -1,8 +1,8 @@
 {
-    "nodeIndex": 0,
+    "nodeIndex": 2,
     "nodes": [
-        { "host": "127.0.0.1", "port": 3000, "isActive": true },
-        { "host": "127.0.0.1", "port": 3001, "isActive": true },
-        { "host": "127.0.0.1", "port": 3002, "isActive": true }
+        { "host": "127.0.0.1", "port": 3000, "isActive": true, "hasToken": true },
+        { "host": "127.0.0.1", "port": 3001, "isActive": true, "hasToken": false },
+        { "host": "127.0.0.1", "port": 3002, "isActive": true, "hasToken": false }
     ]
 }
