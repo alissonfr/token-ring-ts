@@ -1,4 +1,4 @@
-import * as dgram from 'dgram';
+import * as net from 'net';
 import * as readline from 'readline';
 import { Token } from './interfaces/token';
 
@@ -6,74 +6,105 @@ export class TokenNode {
   private readLine: readline.Interface;
   private currentNode: Token;
   private nodes: Token[];
-  private socket: dgram.Socket;
+  private server: net.Server;
   private hasToken: boolean;
 
-  constructor(currentNode: Token, nodes: Token[]) {
+  constructor(currentNode: Token, nodes: Token[], hasToken: boolean) {
     this.currentNode = currentNode;
     this.nodes = nodes;
-    this.hasToken = true;
+    this.hasToken = hasToken;
 
     this.readLine = readline.createInterface({
       input: process.stdin,
       output: process.stdout
     });
-    
-    this.socket = dgram.createSocket('udp4');
+
+    this.server = net.createServer();
     this.run();
   }
 
   private run() {
-    this.socket.on('message', (msg, rinfo) => {
-      this.handleMessage(msg.toString());
+    this.server.on('connection', (socket) => {
+      socket.on('data', (data) => {
+        this.handleMessage(socket, data.toString());
+      });
+      
     });
-
-    this.socket.bind(this.currentNode.port, () => {
+    
+    this.server.listen(this.currentNode.port, () => {
       console.log(`Node rodando na porta ${this.currentNode.port}...`);
-      this.listenForToken();
+      if (this.hasToken) {
+        this.passToken();
+      }
     });
   }
 
-  private handleMessage(msg: string) {
+  private handleMessage(socket: net.Socket, msg: string) {
     if (msg === 'TOKEN') {
+      socket.write('RECEIVED');
+      socket.destroy();
+      console.log("Token recebido!");
       this.hasToken = true;
-      this.readLine.question('Você quer passar o token? (s/n): ', (answer) => {
-        if (answer.toLowerCase() === 's') {
-          this.passToken();
-        } else {
-          this.listenForToken();
-        }
-      });
+      return this.passToken();
+    }
+    
+    if(msg === 'RECEIVED') {
+      console.log("???????????????????")
+
+      // colosar passToken aqui dentro
+
+      return;
     }
   }
 
   private passToken() {
-    this.hasToken = false;
-    const nextNodeSocket = dgram.createSocket('udp4');
-    const nextToken = this.getNextToken();
-    this.socket.send('TOKEN', nextToken.port, nextToken.host, (err) => {
-      if (err) {
-        console.error(err);
+    this.readLine.question('Deseja implementar o recurso? (s/n): ', (answer) => {
+      if (answer.toLowerCase() === 's') {
+        console.log("Implementando recurso e passando token")
+        this.sendMessage("TOKEN");
+      } else {
+        console.log("Passando token")
+        this.sendMessage("TOKEN");
       }
-      this.socket.close();
-      this.listenForToken();
     });
   }
 
-  private listenForToken() {
+  private sendMessage(message: string) {
     const nextToken = this.getNextToken();
-    this.socket.send('TOKEN', nextToken.port, nextToken.host, (err) => {
-      if (err) {
-        console.error(err);
-      }
-    });
+    
+    const client = new net.Socket();
+
+    if(this.hasToken) {
+      client.on('error', (err) => {
+        client.destroy();
+        console.log(`O node da porta ${nextToken.port} está offline. Tentando próximo...`);
+        const currentTokenIndex = this.nodes.indexOf(this.currentNode);
+        const nextIndex = (currentTokenIndex + 1) % this.nodes.length;
+        this.nodes[nextIndex].isActive = false;
+        this.sendMessage("TOKEN");
+      });
+
+      client.connect(nextToken.port, nextToken.host, () => {
+        client.write(message);
+        this.hasToken = false;
+        //client.destroy();
+      });
+    }
+    
   }
 
   private getNextToken(): Token {
-    const currentIndex = this.nodes.indexOf(this.currentNode);
-    const nextIndex = (currentIndex + 1) % this.nodes.length;
+    const currentTokenIndex = this.nodes.indexOf(this.currentNode);
 
-    return this.nodes[nextIndex];
+    for (let i = 1; i < this.nodes.length; i++) {
+      const nextIndex = (currentTokenIndex + i) % this.nodes.length;
+      const nextToken = this.nodes[nextIndex];
+
+      if (nextToken.isActive) {
+        return nextToken;
+      }
+    }
+
+    return this.nodes[0];
   }
-
 }

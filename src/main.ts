@@ -6,8 +6,11 @@ import { Token } from "./interfaces/token";
 const main = () => {
     const nodeConfig: NodeConfig = config;
     const currentNode: Token = nodeConfig.nodes[nodeConfig.nodeIndex];
+    const nodes = nodeConfig.nodes
+    const hasToken = nodes.indexOf(currentNode) === 0;
 
-    new TokenNode(currentNode, nodeConfig.nodes);
+    const node = new TokenNode(currentNode, nodes, hasToken);
+    // node.start();
 }
 
 main();
