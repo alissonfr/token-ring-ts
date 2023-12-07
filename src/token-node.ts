@@ -1,99 +1,130 @@
-import * as net from "net";
-import * as readline from "readline";
+import select, { Separator } from '@inquirer/select';
+import WebSocket from "ws";
 import { Token } from "./interfaces/token";
 import { TipoMensagemEnum } from "./enums/tipo-mensagem.enum";
+import { logError, logMessage, logSuccess } from './helpers/log.helper';
 
 export class TokenNode {
-  private readLine: readline.Interface;
   private currentNode: Token;
   private nodes: Token[];
-  private server: net.Server;
-  private hasToken: boolean;
+  private wss: WebSocket.Server;
 
-  constructor(currentNode: Token, nodes: Token[], hasToken: boolean) {
+  constructor(currentNode: Token, nodes: Token[]) {
     this.currentNode = currentNode;
     this.nodes = nodes;
-    this.hasToken = hasToken;
 
-    this.readLine = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-
-    this.server = net.createServer();
-    this.run();
+    this.wss = new WebSocket.Server({ port: this.currentNode.port });
   }
 
-  private run() {
-    this.server.on("connection", (socket) => {
-      socket.on("data", (data) => {
-        this.handleMessage(socket, data.toString());
+  run() {
+    this.wss.on("connection", (ws) => {
+      ws.on("message", (data) => {
+        this.handleToken(data.toString());
       });
-      
     });
-    
-    this.server.listen(this.currentNode.port, () => {
-      console.log(`Node rodando na porta ${this.currentNode.port}...`);
-      if (this.hasToken) {
-        this.passToken();
-      }
-    });
-  }
 
-  private handleMessage(socket: net.Socket, msg: string) {
-    if (msg === TipoMensagemEnum.TOKEN) {
-      console.log("Token recebido!");
-      this.hasToken = true;
-      return this.passToken();
+    console.log(`Node rodando na porta ${this.currentNode.port}...`);
+
+    if (this.currentNode.hasToken) {
+      this.nodeChoice();
     }
   }
 
-  private passToken() {
-    this.readLine.question("Deseja implementar o recurso? (s/n): ", (answer) => {
-      if (answer.toLowerCase() === "s") {
-        console.log("Implementando recurso e passando token")
-        this.sendMessage(TipoMensagemEnum.TOKEN);
-      } else {
-        console.log("Passando token")
-        this.sendMessage(TipoMensagemEnum.TOKEN);
-      }
+  private handleToken(msg: string) {
+    if (msg === TipoMensagemEnum.TOKEN) {
+      logSuccess("\nToken recebido!\n")
+      this.nodes[this.nodes.indexOf(this.currentNode)].hasToken = true;
+      this.nodeChoice();
+    }
+  }
+
+  private async nodeChoice() {
+    const answer = await select({
+      message: 'Selecione uma opção',
+      choices: [
+        { name: 'Acessar recurso', value: '1', },
+        { name: 'Passar o token para o próximo nó', value: '2', },
+      ],
     });
+
+    if (answer === "1") {
+      logMessage("\nAcessando recurso...")
+      logSuccess("Recurso acessado.\n")
+      this.nodeChoice();
+
+    } else {
+      logMessage("\nPassando token...\n")
+      this.sendMessage(TipoMensagemEnum.TOKEN);
+    }
   }
 
   private sendMessage(message: string) {
-    const nextToken = this.getNextToken();
-    
-    const client = new net.Socket();
+    const nextNode = this.getNextNode();
+
+    const client = new WebSocket(`ws://${nextNode.host}:${nextNode.port}`);
 
     client.on("error", (err) => {
-      client.destroy();
-      console.log(`O node da porta ${nextToken.port} está offline. Tentando próximo...`);
-      const currentTokenIndex = this.nodes.indexOf(this.currentNode);
-      const nextIndex = (currentTokenIndex + 1) % this.nodes.length;
-      this.nodes[nextIndex].isActive = false;
+      logError(`O nó da porta ${nextNode.port} está offline. Tentando próximo...`)
+      this.nodes[this.nodes.indexOf(nextNode)].isActive = false;
       this.sendMessage(TipoMensagemEnum.TOKEN);
     });
 
-    client.connect(nextToken.port, nextToken.host, () => {
-      client.write(message);
-      this.hasToken = false;
-      client.destroy();
+    client.on("open", () => {
+      logSuccess(`Token passado para o nó da porta ${nextNode.port}`)
+      client.send(message);
+      this.nodes[this.nodes.indexOf(this.currentNode)].hasToken = false;
+      this.nodes[this.nodes.indexOf(nextNode)].hasToken = true;
+      this.resetNodes();
+      client.close();
     });
-    
   }
 
-  private getNextToken(): Token {
-    const currentTokenIndex = this.nodes.indexOf(this.currentNode);
+  private getNextNode(): Token {
+    const currentNodeIndex = this.nodes.indexOf(this.currentNode);
 
     for (let i = 1; i < this.nodes.length; i++) {
-      const nextIndex = (currentTokenIndex + i) % this.nodes.length;
-      const nextToken = this.nodes[nextIndex];
+      const nextIndex = (currentNodeIndex + i) % this.nodes.length;
+      const nextNode = this.nodes[nextIndex];
 
-      if (nextToken.isActive) {
-        return nextToken;
+      if (nextNode.isActive) {
+        return nextNode;
       }
     }
 
-    return this.nodes[0];
+    return this.currentNode;
+  }
+
+  checkNextNode() {
+    if (this.nodes[this.nodes.indexOf(this.currentNode)].hasToken) {
+      return; // Não tem pq ficar pingando nos outros se eu já tenho o token
+    }
+    const nextNode = this.getNextNode();
+
+    const nextIndex = this.nodes.indexOf(nextNode);
+    const client = new WebSocket(`ws://${nextNode.host}:${nextNode.port}`);
+
+    client.on("error", (err) => {
+      logError(`Ping: O nó da porta ${nextNode.port} está offline. Tentando próximo...`)
+      this.nodes[nextIndex].isActive = false;
+
+      if (this.nodes[nextIndex].hasToken) {
+        this.nodes[nextIndex].hasToken = false;
+
+        this.nodes[this.nodes.indexOf(this.currentNode)].hasToken = true;
+        this.nodeChoice();
+      }
+    });
+
+    client.on("open", () => {
+      logSuccess(`Ping: O nó da porta ${nextNode.port} está online.`)
+      this.resetNodes();
+      client.close();
+    });
+  }
+
+  private resetNodes(): void {
+    for (let i = 0; i < this.nodes.length; i++) {
+      this.nodes[i].isActive = true;
+    }
   }
 }
