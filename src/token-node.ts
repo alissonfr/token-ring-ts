@@ -48,35 +48,54 @@ export class TokenNode {
     });
 
     if (answer === "1") {
-      logMessage("\nAcessando recurso...")
-      logSuccess("Recurso acessado.\n")
-      this.nodeChoice();
+      this.accessResource();
 
     } else {
-      logMessage("\nPassando token...\n")
-      this.sendMessage(TipoMensagemEnum.TOKEN);
+      this.passToken();
     }
+  }
+
+  private accessResource() {
+    logMessage("\nAcessando recurso...")
+    logSuccess("Recurso acessado.\n")
+    this.nodeChoice();
+  }
+
+  private passToken() {
+    logMessage("\nPassando token...\n")
+    this.sendMessage(TipoMensagemEnum.TOKEN);
   }
 
   private sendMessage(message: string) {
     const nextNode = this.getNextNode();
-
-    const client = new WebSocket(`ws://${nextNode.host}:${nextNode.port}`);
+    const client = this.createWebSocketClient(nextNode);
 
     client.on("error", (err) => {
-      logError(`O nó da porta ${nextNode.port} está offline. Tentando próximo...`)
-      this.nodes[this.nodes.indexOf(nextNode)].isActive = false;
-      this.sendMessage(TipoMensagemEnum.TOKEN);
+      this.handleClientError(err, nextNode);
     });
 
     client.on("open", () => {
-      logSuccess(`Token passado para o nó da porta ${nextNode.port}`)
-      client.send(message);
-      this.nodes[this.nodes.indexOf(this.currentNode)].hasToken = false;
-      this.nodes[this.nodes.indexOf(nextNode)].hasToken = true;
-      this.resetNodes();
-      client.close();
+      this.handleClientOpen(nextNode, client, message);
     });
+  }
+
+  private createWebSocketClient(node: Token): WebSocket {
+    return new WebSocket(`ws://${node.host}:${node.port}`);
+  }
+
+  private handleClientError(err: any, nextNode: Token) {
+    logError(`O nó da porta ${nextNode.port} está offline. Tentando próximo...`)
+    this.nodes[this.nodes.indexOf(nextNode)].isActive = false;
+    this.sendMessage(TipoMensagemEnum.TOKEN);
+  }
+
+  private handleClientOpen(nextNode: Token, client: WebSocket, message: string) {
+    logSuccess(`Token passado para o nó da porta ${nextNode.port}`)
+    client.send(message);
+    this.nodes[this.nodes.indexOf(this.currentNode)].hasToken = false;
+    this.nodes[this.nodes.indexOf(nextNode)].hasToken = true;
+    this.resetNodes();
+    client.close();
   }
 
   private getNextNode(): Token {
@@ -98,28 +117,35 @@ export class TokenNode {
     if (this.nodes[this.nodes.indexOf(this.currentNode)].hasToken) {
       return; // Não tem pq ficar pingando nos outros se eu já tenho o token
     }
-    const nextNode = this.getNextNode();
 
+    const nextNode = this.getNextNode();
     const nextIndex = this.nodes.indexOf(nextNode);
-    const client = new WebSocket(`ws://${nextNode.host}:${nextNode.port}`);
+    const client = this.createWebSocketClient(nextNode);
 
     client.on("error", (err) => {
-      logError(`Ping: O nó da porta ${nextNode.port} está offline. Tentando próximo...`)
-      this.nodes[nextIndex].isActive = false;
-
-      if (this.nodes[nextIndex].hasToken) {
-        this.nodes[nextIndex].hasToken = false;
-
-        this.nodes[this.nodes.indexOf(this.currentNode)].hasToken = true;
-        this.nodeChoice();
-      }
+      this.handlePingError(err, nextNode, nextIndex);
     });
 
     client.on("open", () => {
-      logSuccess(`Ping: O nó da porta ${nextNode.port} está online.`)
-      this.resetNodes();
+      this.handlePingSuccess(nextNode);
       client.close();
     });
+  }
+
+  private handlePingError(err: any, nextNode: Token, nextIndex: number) {
+    logError(`Ping: O nó da porta ${nextNode.port} está offline. Tentando próximo...`)
+    this.nodes[nextIndex].isActive = false;
+
+    if (this.nodes[nextIndex].hasToken) {
+      this.nodes[nextIndex].hasToken = false;
+      this.nodes[this.nodes.indexOf(this.currentNode)].hasToken = true;
+      this.nodeChoice();
+    }
+  }
+
+  private handlePingSuccess(nextNode: Token) {
+    logSuccess(`Ping: O nó da porta ${nextNode.port} está online.`)
+    this.resetNodes();
   }
 
   private resetNodes(): void {

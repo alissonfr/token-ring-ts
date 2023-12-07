@@ -10,7 +10,7 @@ const main = () => {
     
     const node = new TokenNode(currentNode, nodes);
     node.run();
-    setInterval(() => node.checkNextNode(), 2000);
+    setInterval(() => node.checkNextNode(), 5000);
 }
 
 main();
