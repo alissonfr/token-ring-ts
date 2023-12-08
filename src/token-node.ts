@@ -12,11 +12,10 @@ export class TokenNode {
   constructor(currentNode: Token, nodes: Token[]) {
     this.currentNode = currentNode;
     this.nodes = nodes;
-
-    this.wss = new WebSocket.Server({ port: this.currentNode.port });
   }
-
-  run() {
+  
+  run(): void {
+    this.wss = new WebSocket.Server({ port: this.currentNode.port });
     this.wss.on("connection", (ws) => {
       ws.on("message", (data) => {
         this.handleToken(data.toString());
@@ -30,15 +29,15 @@ export class TokenNode {
     }
   }
 
-  private handleToken(msg: string) {
+  private handleToken(msg: string): void {
     if (msg === TipoMensagemEnum.TOKEN) {
-      logSuccess("\nToken recebido!\n")
+      logSuccess("\nToken recebido!\n");
       this.nodes[this.nodes.indexOf(this.currentNode)].hasToken = true;
       this.nodeChoice();
     }
   }
 
-  private async nodeChoice() {
+  private async nodeChoice(): Promise<void> {
     const answer = await select({
       message: 'Selecione uma opção',
       choices: [
@@ -55,23 +54,23 @@ export class TokenNode {
     }
   }
 
-  private accessResource() {
-    logMessage("\nAcessando recurso...")
-    logSuccess("Recurso acessado.\n")
+  private accessResource(): void {
+    logMessage("\nAcessando recurso...");
+    logSuccess("Recurso acessado.\n");
     this.nodeChoice();
   }
 
-  private passToken() {
+  private passToken(): void {
     logMessage("\nPassando token...\n")
     this.sendMessage(TipoMensagemEnum.TOKEN);
   }
 
-  private sendMessage(message: string) {
+  private sendMessage(message: string): void {
     const nextNode = this.getNextNode();
     const client = this.createWebSocketClient(nextNode);
 
     client.on("error", (err) => {
-      this.handleClientError(err, nextNode);
+      this.handleClientError(nextNode);
     });
 
     client.on("open", () => {
@@ -83,14 +82,14 @@ export class TokenNode {
     return new WebSocket(`ws://${node.host}:${node.port}`);
   }
 
-  private handleClientError(err: any, nextNode: Token) {
+  private handleClientError(nextNode: Token): void {
     logError(`O nó da porta ${nextNode.port} está offline. Tentando próximo...`)
     this.nodes[this.nodes.indexOf(nextNode)].isActive = false;
     this.sendMessage(TipoMensagemEnum.TOKEN);
   }
 
-  private handleClientOpen(nextNode: Token, client: WebSocket, message: string) {
-    logSuccess(`Token passado para o nó da porta ${nextNode.port}`)
+  private handleClientOpen(nextNode: Token, client: WebSocket, message: string): void {
+    logSuccess(`Token passado para o nó da porta ${nextNode.port}`);
     client.send(message);
     this.nodes[this.nodes.indexOf(this.currentNode)].hasToken = false;
     this.nodes[this.nodes.indexOf(nextNode)].hasToken = true;
@@ -113,7 +112,7 @@ export class TokenNode {
     return this.currentNode;
   }
 
-  checkNextNode() {
+  checkNextNode(): void {
     if (this.nodes[this.nodes.indexOf(this.currentNode)].hasToken) {
       return; // Não tem pq ficar pingando nos outros se eu já tenho o token
     }
@@ -123,7 +122,7 @@ export class TokenNode {
     const client = this.createWebSocketClient(nextNode);
 
     client.on("error", (err) => {
-      this.handlePingError(err, nextNode, nextIndex);
+      this.handlePingError(nextNode, nextIndex);
     });
 
     client.on("open", () => {
@@ -132,8 +131,8 @@ export class TokenNode {
     });
   }
 
-  private handlePingError(err: any, nextNode: Token, nextIndex: number) {
-    logError(`Ping: O nó da porta ${nextNode.port} está offline. Tentando próximo...`)
+  private handlePingError(nextNode: Token, nextIndex: number): void {
+    logError(`Ping: O nó da porta ${nextNode.port} está offline. Tentando próximo...`);
     this.nodes[nextIndex].isActive = false;
 
     if (this.nodes[nextIndex].hasToken) {
@@ -143,8 +142,8 @@ export class TokenNode {
     }
   }
 
-  private handlePingSuccess(nextNode: Token) {
-    logSuccess(`Ping: O nó da porta ${nextNode.port} está online.`)
+  private handlePingSuccess(nextNode: Token): void {
+    logSuccess(`Ping: O nó da porta ${nextNode.port} está online.`);
     this.resetNodes();
   }
 
